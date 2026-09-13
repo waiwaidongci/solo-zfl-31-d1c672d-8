@@ -47,6 +47,12 @@
     .st-approved { background: #d9ecd3; color: #2f6b2f; }
     .st-rejected { background: #f3d2cc; color: #a03a2e; }
     .badge.cur { background: #8d3e37; color: #fff; }
+    .badge.ro { background: #71675c; color: #fff; }
+    #notice { padding: 8px 24px; font-weight: 700; border-bottom: 1px solid #d9cdbc; }
+    #notice.ok { background: #eef7ee; color: #2f6b2f; }
+    #notice.err { background: #f9e9e6; color: #a03a2e; }
+    .branchbox { display: flex; gap: 6px; margin-top: 6px; }
+    .branchbox input { flex: 1; padding: 6px; font-size: 12px; }
     .hint2 { font-size: 12px; color: #76695e; }
     .hint { font-size: 12px; color: #a03a2e; }
     #versionList, #auditList { max-height: 540px; overflow: auto; }
@@ -95,6 +101,7 @@
     </div>
   </header>
   <div id="currentBar"></div>
+  <div id="notice" hidden></div>
   <main class="app">
     <aside class="panel">
       <h2>画布</h2>
@@ -166,6 +173,17 @@
     function fmtTime(iso) { if (!iso) return "-"; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString("zh-CN", { hour12: false }); }
     function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
     function valName(v) { return v < 0 ? "无" : "色线" + v; }
+
+    // 内联通知（不依赖 alert/弹窗，内置浏览器不会拦截）
+    let noticeTimer = null;
+    function notify(msg, isErr) {
+      const n = $("#notice");
+      n.textContent = msg;
+      n.className = isErr ? "err" : "ok";
+      n.hidden = false;
+      if (noticeTimer) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => { n.hidden = true; }, 4000);
+    }
 
     function cur() { return store.versions[store.currentId] || null; }
     function isEditable() { const v = cur(); return !!v && (v.status === "draft" || v.status === "rejected"); }
@@ -280,9 +298,12 @@
       const v = cur();
       if (!v) { currentBar.innerHTML = ""; return; }
       const lock = lockMsg();
+      const editBadge = isEditable()
+        ? '<span class="badge cur">可编辑</span>'
+        : '<span class="badge ro">只读</span>';
       currentBar.innerHTML = '<span>当前版本：<b>' + esc(v.name) + '</b></span>'
         + '<span class="badge st-' + v.status + '">' + STATUS[v.status] + (v.locked ? ' 🔒' : '') + '</span>'
-        + '<span class="badge cur">编辑中</span>'
+        + editBadge
         + '<span>尺寸 ' + v.cols + '×' + v.rows + '</span>'
         + '<span>创建 ' + esc(v.createdBy) + ' ' + fmtTime(v.createdAt) + '</span>'
         + (v.submittedBy ? '<span>提交 ' + esc(v.submittedBy) + ' ' + fmtTime(v.submittedAt) + '</span>' : '')
@@ -301,6 +322,13 @@
         d++; seen.add(p); curId = p;
       }
       return d;
+    }
+
+    // 分支命名用内联表单，不用 prompt 弹窗
+    let branchFormFor = null;
+    function defaultBranchName(v) {
+      const n = store.order.filter(i => store.versions[i].parentId === v.id).length + 1;
+      return v.name + "-分支" + n;
     }
 
     function renderVersions() {
@@ -322,23 +350,37 @@
         btns += '</div>';
         const rejectForm = (v.status === "pending" && !selfReview)
           ? '<div class="rejectbox" id="rejectBox-' + id + '" hidden><input id="rejectReason-' + id + '" placeholder="退回原因（必填）"><button class="mini warn" data-act="confirmReject" data-id="' + id + '">确认退回</button></div>' : "";
+        const branchForm = (branchFormFor === id)
+          ? '<div class="branchbox"><input id="branchName-' + id + '" value="' + esc(defaultBranchName(v)) + '" placeholder="新草稿名称（留空用默认名）">'
+            + '<button class="mini" data-act="confirmBranch" data-id="' + id + '">确认</button>'
+            + '<button class="mini secondary" data-act="cancelBranch" data-id="' + id + '">取消</button></div>' : "";
         return '<div class="vitem' + (isCur ? ' current' : '') + '" style="margin-left:' + (depthOf(id) * 14) + 'px">'
           + '<div class="vhead"><b>' + esc(v.name) + '</b><span class="badge st-' + v.status + '">' + STATUS[v.status] + (v.locked ? ' 🔒' : '') + '</span>' + (isCur ? '<span class="badge cur">当前</span>' : '') + '</div>'
           + '<div class="vmeta">' + v.cols + '×' + v.rows + '｜' + esc(v.createdBy) + ' ' + fmtTime(v.createdAt)
           + (v.parentId && store.versions[v.parentId] ? '｜源自「' + esc(store.versions[v.parentId].name) + '」' : '')
           + (v.submittedBy ? '<br>提交：' + esc(v.submittedBy) + ' ' + fmtTime(v.submittedAt) : '')
           + (v.reviewedBy ? '<br>' + (v.status === "rejected" ? '退回' : '通过') + '：' + esc(v.reviewedBy) + ' ' + fmtTime(v.reviewedAt) + (v.reviewReason ? '｜原因：' + esc(v.reviewReason) : '') : '')
-          + '</div>' + btns + rejectForm + '</div>';
+          + '</div>' + btns + rejectForm + branchForm + '</div>';
       }).join("");
       versionList.querySelectorAll("[data-act]").forEach(el => el.onclick = () => {
         const id = el.dataset.id, act = el.dataset.act;
         if (act === "switch") switchVersion(id);
-        else if (act === "branch") branchFrom(id);
+        else if (act === "branch") toggleBranchForm(id);
+        else if (act === "confirmBranch") confirmBranch(id);
+        else if (act === "cancelBranch") cancelBranch();
         else if (act === "submit") submitVersion(id);
         else if (act === "approve") approveVersion(id);
         else if (act === "reject") { const box = document.getElementById("rejectBox-" + id); if (box) box.hidden = !box.hidden; const inp = document.getElementById("rejectReason-" + id); if (inp) inp.focus(); }
         else if (act === "confirmReject") rejectVersion(id);
       });
+      if (branchFormFor) {
+        const inp = document.getElementById("branchName-" + branchFormFor);
+        if (inp) {
+          inp.focus();
+          if (inp.select) inp.select();
+          inp.onkeydown = e => { if (e.key === "Enter") confirmBranch(branchFormFor); else if (e.key === "Escape") cancelBranch(); };
+        }
+      }
     }
 
     function renderAudit() {
@@ -353,17 +395,31 @@
       store.currentId = id;
       syncFromStore(); saveStore(); renderAll();
     }
-    function branchFrom(id) {
-      const src = store.versions[id];
-      if (!src) return;
-      const n = store.order.filter(i => store.versions[i].parentId === id).length + 1;
-      const def = src.name + "-分支" + n;
-      const name = (prompt("新草稿名称：", def) || "").trim() || def;
-      const v = makeVersion(name, src.id, src.cols, src.rows, src.cells);
+    function toggleBranchForm(id) {
+      branchFormFor = (branchFormFor === id) ? null : id; // 重复点击同一版本 = 收起
+      renderMeta();
+    }
+    function cancelBranch() {
+      branchFormFor = null;
+      renderMeta();
+    }
+    function confirmBranch(id) {
+      const input = document.getElementById("branchName-" + id);
+      const name = input ? input.value : "";
+      branchFormFor = null;
+      const v = createBranch(id, name);
+      if (v) notify("已建立草稿「" + v.name + "」");
+    }
+    function createBranch(srcId, name) {
+      const src = store.versions[srcId];
+      if (!src) return null;
+      const finalName = (name || "").trim() || defaultBranchName(src);
+      const v = makeVersion(finalName, src.id, src.cols, src.rows, src.cells);
       addVersion(v);
       store.currentId = v.id;
       logAudit("branch", "从「" + src.name + "」分支新建草稿「" + v.name + "」", v.id);
       syncFromStore(); saveStore(); renderAll();
+      return v;
     }
     function submitVersion(id) {
       const v = store.versions[id];
@@ -373,27 +429,30 @@
       v.reviewedBy = null; v.reviewedAt = null; v.reviewReason = null;
       logAudit("submit", "提交「" + v.name + "」审核", v.id);
       saveStore(); renderAll();
+      notify("已提交「" + v.name + "」审核，需他人审签。");
     }
     function approveVersion(id) {
       const v = store.versions[id];
       if (!v || v.status !== "pending") return;
-      if (currentUser === v.submittedBy) { alert("本人不能审批自己的提交，请切换其他人员审签。"); return; }
+      if (currentUser === v.submittedBy) { notify("本人不能审批自己的提交，请切换其他人员审签。", true); return; }
       v.status = "approved"; v.locked = true;
       v.reviewedBy = currentUser; v.reviewedAt = nowISO(); v.reviewReason = null;
       logAudit("approve", "通过「" + v.name + "」，版本已锁定", v.id);
       saveStore(); renderAll();
+      notify("已通过「" + v.name + "」，版本已锁定。");
     }
     function rejectVersion(id) {
       const v = store.versions[id];
       if (!v || v.status !== "pending") return;
-      if (currentUser === v.submittedBy) { alert("本人不能审批自己的提交，请切换其他人员审签。"); return; }
+      if (currentUser === v.submittedBy) { notify("本人不能审批自己的提交，请切换其他人员审签。", true); return; }
       const input = document.getElementById("rejectReason-" + id);
       const reason = ((input && input.value) || "").trim();
-      if (!reason) { if (input) input.focus(); alert("退回必须填写原因。"); return; }
+      if (!reason) { if (input) input.focus(); notify("退回必须填写原因。", true); return; }
       v.status = "rejected"; v.locked = false;
       v.reviewedBy = currentUser; v.reviewedAt = nowISO(); v.reviewReason = reason;
       logAudit("reject", "退回「" + v.name + "」：" + reason, v.id);
       saveStore(); renderAll();
+      notify("已退回「" + v.name + "」。");
     }
 
     // ============ 对比与合并 ============
@@ -546,8 +605,8 @@
       const sess = getSession(aId, bId, false);
       const conflicts = items.filter(i => i.conflict && i.mergeable);
       const unresolved = conflicts.filter(i => !sess.resolutions[posKey(i)]);
-      if (unresolved.length) { alert("还有 " + unresolved.length + " 处冲突未处理，不能合并。"); return; }
-      if (!items.length) { alert("两版没有可合并的差异。"); return; }
+      if (unresolved.length) { notify("还有 " + unresolved.length + " 处冲突未处理，不能合并。", true); return; }
+      if (!items.length) { notify("两版没有可合并的差异。", true); return; }
       const newCells = A.cells.slice();
       let picked = 0, confA = 0, confB = 0, skipped = 0;
       items.forEach(it => {
@@ -566,6 +625,7 @@
       store.currentId = v.id;
       logAudit("merge", "将「" + B.name + "」并入「" + A.name + "」生成新草稿「" + name + "」：采用普通差异 " + picked + " 项，处理冲突 " + conflicts.length + " 项（取目标 " + confA + "、取来源 " + confB + "），跳过 " + skipped + " 项", v.id);
       syncFromStore(); saveStore(); renderAll();
+      notify("已生成合并草稿「" + name + "」。");
     }
 
     // ============ 导入导出 ============
@@ -593,10 +653,11 @@
         store.currentId = v.id;
         logAudit("import", "导入旧版导出文件为新草稿「" + v.name + "」", v.id);
       } else {
-        alert("导入失败：无法识别的文件格式");
+        notify("导入失败：无法识别的文件格式", true);
         return;
       }
       syncFromStore(); saveStore(); renderAll();
+      notify("导入完成。");
     }
 
     // ============ 整体渲染 ============
@@ -630,7 +691,7 @@
       const r = new FileReader();
       r.onload = () => {
         try { importData(JSON.parse(r.result)); }
-        catch (err) { alert("导入失败：文件不是有效的JSON"); }
+        catch (err) { notify("导入失败：文件不是有效的JSON", true); }
         e.target.value = "";
       };
       r.readAsText(f);
