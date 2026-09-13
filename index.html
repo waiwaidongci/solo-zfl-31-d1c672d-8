@@ -7,13 +7,19 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, "PingFang SC", sans-serif; background: #f3efe7; color: #282018; }
-    header { padding: 18px 24px; background: #fffaf2; border-bottom: 1px solid #d9cdbc; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    header { padding: 18px 24px; background: #fffaf2; border-bottom: 1px solid #d9cdbc; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
     h1 { margin: 0; font-size: 26px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 15px; margin: 14px 0 6px; }
     button { border: 0; border-radius: 8px; padding: 10px 13px; background: #8d3e37; color: #fff; font-weight: 800; cursor: pointer; }
     button.secondary { background: #71675c; }
+    button.warn { background: #a03a2e; }
+    button.mini { padding: 5px 9px; font-size: 12px; border-radius: 6px; }
+    button[disabled] { opacity: .45; cursor: not-allowed; }
     input, select { width: 100%; border: 1px solid #d9cdbc; border-radius: 6px; padding: 9px; font: inherit; background: #fff; }
     label { display: block; margin: 9px 0 5px; color: #76695e; font-size: 13px; }
     .app { display: grid; grid-template-columns: 280px 1fr 320px; gap: 16px; padding: 16px; }
+    .versionArea { grid-template-columns: 1fr 1.3fr 1fr; align-items: start; }
     .panel { background: #fffaf2; border: 1px solid #d9cdbc; border-radius: 8px; padding: 14px; }
     .grid { display: grid; gap: 2px; margin: 0 auto; width: min(100%, 720px); border: 6px solid #72533c; background: #72533c; }
     .cell { aspect-ratio: 1; background: #f8ead2; cursor: pointer; border-radius: 2px; }
@@ -27,14 +33,68 @@
     .mini { aspect-ratio: 1; border-radius: 2px; }
     .toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .warning { color: #a03a2e; font-weight: 800; }
-    @media (max-width: 1000px) { header { display: block; } .app { grid-template-columns: 1fr; } }
+    /* 版本审签与对比合并 */
+    .headside { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
+    .userbox label { margin: 0 0 4px; }
+    #userName { width: 130px; }
+    #saveTip { font-size: 12px; color: #2f6b2f; align-self: center; }
+    #currentBar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 24px; background: #fff; border-bottom: 1px solid #d9cdbc; font-size: 14px; }
+    #currentBar.shake { animation: shake .35s; }
+    @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 11px; font-size: 12px; font-weight: 700; }
+    .st-draft { background: #e7e2d8; color: #5c554b; }
+    .st-pending { background: #f6e3b4; color: #8a5a00; }
+    .st-approved { background: #d9ecd3; color: #2f6b2f; }
+    .st-rejected { background: #f3d2cc; color: #a03a2e; }
+    .badge.cur { background: #8d3e37; color: #fff; }
+    .hint2 { font-size: 12px; color: #76695e; }
+    .hint { font-size: 12px; color: #a03a2e; }
+    #versionList, #auditList { max-height: 540px; overflow: auto; }
+    #cmpResult { max-height: 600px; overflow: auto; }
+    .vitem { border: 1px solid #e1d5c5; border-radius: 8px; padding: 8px; margin: 6px 0; background: #fff; }
+    .vitem.current { border-color: #8d3e37; box-shadow: 0 0 0 1px #8d3e37; }
+    .vhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .vmeta { color: #76695e; font-size: 12px; margin-top: 4px; line-height: 1.6; }
+    .vbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+    .rejectbox { display: flex; gap: 6px; margin-top: 6px; }
+    .rejectbox input { flex: 1; padding: 6px; font-size: 12px; }
+    .aitem { border-bottom: 1px solid #e1d5c5; padding: 6px 0; font-size: 13px; }
+    .ameta { color: #76695e; font-size: 12px; margin-bottom: 2px; }
+    .chip { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.2); vertical-align: -2px; }
+    .cmpSel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .diffgrid { display: grid; gap: 1px; border: 1px solid #d9cdbc; background: #e8dfd2; max-width: 100%; }
+    .dgcell { aspect-ratio: 1; min-width: 6px; }
+    .dgcell.same { opacity: .3; }
+    .dgcell.diff { background: #f0b429; }
+    .dgcell.conf { background: #c0392b; }
+    .dgcell.out { background: repeating-linear-gradient(45deg, #cfc8bc, #cfc8bc 2px, #eee9df 2px, #eee9df 4px); }
+    .legend { font-size: 12px; color: #76695e; }
+    .lg { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin: 0 4px 0 10px; }
+    .lg.diff { background: #f0b429; } .lg.conf { background: #c0392b; } .lg.out { background: #cfc8bc; }
+    .citem { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px dashed #e1d5c5; font-size: 13px; margin: 0; color: #282018; }
+    .citem.resolved { background: #eef7ee; }
+    .citem .base { color: #76695e; font-size: 12px; }
+    .citem label { margin: 0; display: flex; align-items: center; gap: 4px; color: #282018; }
+    .citem input[type="radio"], .citem input[type="checkbox"] { width: auto; }
+    .mergebar { margin-top: 12px; }
+    @media (max-width: 1000px) { header { display: block; } .app { grid-template-columns: 1fr; } .versionArea { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <header>
     <div><h1>手工织锦纹样排版台</h1><div>绘制经纬网格纹样，统计色线用量并保存方案。</div></div>
-    <div class="toolbar"><button id="saveBtn">保存方案</button><button id="exportBtn" class="secondary">导出JSON</button></div>
+    <div class="headside">
+      <div class="userbox"><label for="userName">当前人员（审签身份）</label><input id="userName"></div>
+      <div class="toolbar">
+        <button id="saveBtn">保存方案</button>
+        <button id="exportBtn" class="secondary">导出JSON</button>
+        <button id="importBtn" class="secondary">导入JSON</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+      <span id="saveTip"></span>
+    </div>
   </header>
+  <div id="currentBar"></div>
   <main class="app">
     <aside class="panel">
       <h2>画布</h2>
@@ -54,7 +114,7 @@
     <aside class="panel">
       <h2>操作</h2>
       <div class="toolbar"><button id="undoBtn" class="secondary">撤销</button><button id="redoBtn" class="secondary">重做</button></div>
-      <p>点击填色，按住拖动可连续填色。</p>
+      <p>点击填色，按住拖动可连续填色。仅「草稿 / 已退回」版本可编辑，审核中与已通过版本自动锁定。</p>
       <h2>用色统计</h2>
       <div class="stats" id="stats"></div>
       <h2>重复单元预览</h2>
@@ -63,40 +123,136 @@
       <div id="risk"></div>
     </aside>
   </main>
+  <section class="app versionArea">
+    <div class="panel">
+      <h2>版本与审签</h2>
+      <p class="hint2">任意版本可「分支」新建草稿；提交审核后需他人审签（本人不能审批自己的提交），退回须填原因；通过后版本锁定。</p>
+      <div id="versionList"></div>
+    </div>
+    <div class="panel">
+      <h2>版本对比与合并</h2>
+      <div class="cmpSel">
+        <div><label>目标版本（合并基准）</label><select id="cmpA"></select></div>
+        <div><label>来源版本（取其变更）</label><select id="cmpB"></select></div>
+      </div>
+      <div id="cmpResult"></div>
+    </div>
+    <div class="panel">
+      <h2>操作记录</h2>
+      <p class="hint2">分支、提交、审签、合并均记录人员、时间与详情，记录只增不减、不可清除。</p>
+      <div id="auditList"></div>
+    </div>
+  </section>
   <script>
+    // ============ 基础（沿用旧版） ============
     const colors = ["#f7e7c4","#a6322d","#1f5f78","#d6a437","#355b38","#713d7b","#1e1b18","#e98c52"];
-    const grid = document.querySelector("#grid");
-    const palette = document.querySelector("#palette");
-    const stats = document.querySelector("#stats");
-    const preview = document.querySelector("#preview");
-    const risk = document.querySelector("#risk");
+    const $ = s => document.querySelector(s);
+    const grid = $("#grid"), palette = $("#palette"), stats = $("#stats"), preview = $("#preview"), risk = $("#risk");
+    const currentBar = $("#currentBar"), versionList = $("#versionList"), auditList = $("#auditList"), cmpResult = $("#cmpResult");
+    const cmpA = $("#cmpA"), cmpB = $("#cmpB");
     let cols = 18, rows = 14, active = 1, block = "dot", dragging = false;
     let cells = [];
     let undo = [], redo = [];
-    function init(loadSaved = true) {
-      const saved = loadSaved && JSON.parse(localStorage.getItem("zfl31Pattern") || "null");
-      if (saved) { cols = saved.cols; rows = saved.rows; cells = saved.cells; }
-      else { cols = Number(document.querySelector("#cols").value); rows = Number(document.querySelector("#rows").value); cells = Array(cols * rows).fill(0); }
-      document.querySelector("#cols").value = cols; document.querySelector("#rows").value = rows;
-      render();
+
+    // ============ 版本库 ============
+    const STORE_KEY = "zfl31Studio", OLD_KEY = "zfl31Pattern", USER_KEY = "zfl31User";
+    const STATUS = { draft: "草稿", pending: "审核中", approved: "已通过", rejected: "已退回" };
+    const ACT_NAME = { create: "建立版本", branch: "分支", submit: "提交审核", approve: "审签通过", reject: "审签退回", merge: "合并", import: "导入" };
+    let store = null;
+    let currentUser = (localStorage.getItem(USER_KEY) || "织工甲").trim() || "织工甲";
+
+    function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+    function nowISO() { return new Date().toISOString(); }
+    function fmtTime(iso) { if (!iso) return "-"; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString("zh-CN", { hour12: false }); }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+    function valName(v) { return v < 0 ? "无" : "色线" + v; }
+
+    function cur() { return store.versions[store.currentId] || null; }
+    function isEditable() { const v = cur(); return !!v && (v.status === "draft" || v.status === "rejected"); }
+    function lockMsg() {
+      const v = cur();
+      if (!v) return "";
+      if (v.status === "approved") return "该版本已通过并锁定，不可修改；可点「分支」基于此版本新建草稿。";
+      if (v.status === "pending") return "该版本正在审核中，暂不可修改；可「分支」新建草稿，或等待审签结果。";
+      return "";
     }
+
+    function makeVersion(name, parentId, vcols, vrows, vcells, status) {
+      return { id: uid("v"), name, parentId: parentId || null, cols: vcols, rows: vrows, cells: vcells.slice(),
+        status: status || "draft", locked: false, createdBy: currentUser, createdAt: nowISO(),
+        submittedBy: null, submittedAt: null, reviewedBy: null, reviewedAt: null, reviewReason: null };
+    }
+    function addVersion(v) { store.versions[v.id] = v; if (!store.order.includes(v.id)) store.order.push(v.id); }
+
+    function logAudit(action, detail, vid) {
+      const v = vid ? store.versions[vid] : cur();
+      store.seq = (store.seq || 0) + 1;
+      store.audit.push({ seq: store.seq, time: nowISO(), user: currentUser, action,
+        versionId: v ? v.id : null, versionName: v ? v.name : "", detail });
+    }
+
+    function saveStore() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      localStorage.setItem(OLD_KEY, JSON.stringify({ cols, rows, cells })); // 兼容旧版存档
+    }
+
+    function loadStore() {
+      let s = null;
+      try { s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) { s = null; }
+      if (s && s.versions && s.currentId && s.versions[s.currentId]) {
+        store = Object.assign({ versions: {}, order: [], currentId: null, audit: [], mergeSessions: {}, seq: 0, compareSel: null }, s);
+        store.order = (store.order || []).filter(id => store.versions[id]);
+        Object.keys(store.versions).forEach(id => { if (!store.order.includes(id)) store.order.push(id); });
+      } else {
+        store = { versions: {}, order: [], currentId: null, audit: [], mergeSessions: {}, seq: 0, compareSel: null };
+        let old = null;
+        try { old = JSON.parse(localStorage.getItem(OLD_KEY) || "null"); } catch (e) {}
+        const v = (old && Array.isArray(old.cells) && old.cols && old.rows)
+          ? makeVersion("初始草稿（迁移自旧存档）", null, old.cols, old.rows, old.cells)
+          : makeVersion("初始草稿", null, 18, 14, Array(18 * 14).fill(0));
+        addVersion(v);
+        store.currentId = v.id;
+        logAudit("create", old ? "由本地旧存档迁移建立初始草稿" : "新建初始草稿", v.id);
+        saveStore();
+      }
+    }
+
+    function syncFromStore() {
+      const v = cur();
+      cols = v.cols; rows = v.rows; cells = v.cells.slice();
+      undo = []; redo = [];
+      $("#cols").value = cols; $("#rows").value = rows;
+    }
+    function writeBack() {
+      const v = cur();
+      if (v) { v.cols = cols; v.rows = rows; v.cells = cells.slice(); }
+      saveStore();
+    }
+
+    // ============ 画布渲染与编辑（旧功能） ============
     function render() {
-      palette.innerHTML = colors.map((c, i) => '<button class="swatch '+(i===active?'active':'')+'" data-color="'+i+'" style="background:'+c+'"></button>').join("");
+      palette.innerHTML = colors.map((c, i) => '<button class="swatch ' + (i === active ? 'active' : '') + '" data-color="' + i + '" style="background:' + c + '"></button>').join("");
       palette.querySelectorAll("[data-color]").forEach(el => el.onclick = () => { active = Number(el.dataset.color); render(); });
-      grid.style.gridTemplateColumns = "repeat("+cols+", 1fr)";
-      grid.innerHTML = cells.map((v, i) => '<div class="cell" data-i="'+i+'" style="background:'+colors[v]+'"></div>').join("");
+      grid.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+      grid.innerHTML = cells.map((v, i) => '<div class="cell" data-i="' + i + '" style="background:' + colors[v] + '"></div>').join("");
       grid.querySelectorAll(".cell").forEach(el => {
-        el.onpointerdown = () => { dragging = true; paint(Number(el.dataset.i)); };
-        el.onpointerenter = () => { if (dragging) paint(Number(el.dataset.i)); };
+        el.onpointerdown = () => { if (!guardEditable()) return; dragging = true; paint(Number(el.dataset.i)); };
+        el.onpointerenter = () => { if (dragging && isEditable()) paint(Number(el.dataset.i)); };
       });
       window.onpointerup = () => dragging = false;
       renderStats();
     }
+    function guardEditable() {
+      if (isEditable()) return true;
+      currentBar.classList.add("shake");
+      setTimeout(() => currentBar.classList.remove("shake"), 400);
+      return false;
+    }
     function snapshot() { undo.push([...cells]); redo = []; if (undo.length > 50) undo.shift(); }
     function paint(i) {
       snapshot();
-      const targets = pattern(i);
-      targets.forEach(t => { if (t >= 0 && t < cells.length) cells[t] = active; });
+      pattern(i).forEach(t => { if (t >= 0 && t < cells.length) cells[t] = active; });
+      writeBack();
       render();
     }
     function pattern(i) {
@@ -105,30 +261,392 @@
       if (block === "diamond") return [idx(x,y-1), idx(x-1,y), i, idx(x+1,y), idx(x,y+1)].filter(v => v !== null);
       return [i];
     }
-    function idx(x,y) { return x < 0 || x >= cols || y < 0 || y >= rows ? null : y * cols + x; }
+    function idx(x, y) { return x < 0 || x >= cols || y < 0 || y >= rows ? null : y * cols + x; }
     function renderStats() {
       const counts = colors.map((_, i) => cells.filter(v => v === i).length);
-      stats.innerHTML = counts.map((n, i) => '<div class="stat"><span><span style="display:inline-block;width:14px;height:14px;background:'+colors[i]+'"></span> 色线'+i+'</span><b>'+n+'</b></div>').join("");
-      preview.innerHTML = Array.from({length: 36}, (_, i) => '<div class="mini" style="background:'+colors[cells[(i % 6) + Math.floor(i / 6) * cols] || colors[0]]+'"></div>').join("");
+      stats.innerHTML = counts.map((n, i) => '<div class="stat"><span><span style="display:inline-block;width:14px;height:14px;background:' + colors[i] + '"></span> 色线' + i + '</span><b>' + n + '</b></div>').join("");
+      preview.innerHTML = Array.from({ length: 36 }, (_, i) => '<div class="mini" style="background:' + (colors[cells[(i % 6) + Math.floor(i / 6) * cols]] || colors[0]) + '"></div>').join("");
       const riskRows = [];
       for (let y = 0; y < rows; y++) {
         let switches = 0;
         for (let x = 1; x < cols; x++) if (cells[y*cols+x] !== cells[y*cols+x-1]) switches++;
         if (switches > cols * .62) riskRows.push(y + 1);
       }
-      risk.innerHTML = riskRows.length ? '<p class="warning">第'+riskRows.join("、")+'行换色过密，可能断线。</p>' : '<p>暂无明显断线风险。</p>';
+      risk.innerHTML = riskRows.length ? '<p class="warning">第' + riskRows.join("、") + '行换色过密，可能断线。</p>' : '<p>暂无明显断线风险。</p>';
     }
+
+    // ============ 状态栏 / 版本列表 / 操作记录 ============
+    function renderCurrentBar() {
+      const v = cur();
+      if (!v) { currentBar.innerHTML = ""; return; }
+      const lock = lockMsg();
+      currentBar.innerHTML = '<span>当前版本：<b>' + esc(v.name) + '</b></span>'
+        + '<span class="badge st-' + v.status + '">' + STATUS[v.status] + (v.locked ? ' 🔒' : '') + '</span>'
+        + '<span class="badge cur">编辑中</span>'
+        + '<span>尺寸 ' + v.cols + '×' + v.rows + '</span>'
+        + '<span>创建 ' + esc(v.createdBy) + ' ' + fmtTime(v.createdAt) + '</span>'
+        + (v.submittedBy ? '<span>提交 ' + esc(v.submittedBy) + ' ' + fmtTime(v.submittedAt) + '</span>' : '')
+        + (v.reviewedBy ? '<span>审签 ' + esc(v.reviewedBy) + ' ' + fmtTime(v.reviewedAt) + '</span>' : '')
+        + (lock ? '<span class="warning">' + lock + '</span>'
+          : (v.status === "rejected" && v.reviewReason ? '<span class="warning">退回原因：' + esc(v.reviewReason) + '，可修改后重新提交。</span>'
+          : '<span>可直接绘制编辑。</span>'));
+    }
+
+    function depthOf(id) {
+      let d = 0, curId = id, guard = 0;
+      const seen = new Set([id]);
+      while (guard++ < 1000) {
+        const p = store.versions[curId] && store.versions[curId].parentId;
+        if (!p || !store.versions[p] || seen.has(p)) break;
+        d++; seen.add(p); curId = p;
+      }
+      return d;
+    }
+
+    function renderVersions() {
+      versionList.innerHTML = store.order.map(id => {
+        const v = store.versions[id];
+        const isCur = id === store.currentId;
+        const selfReview = v.status === "pending" && v.submittedBy === currentUser;
+        let btns = '<div class="vbtns">'
+          + '<button class="secondary mini" data-act="switch" data-id="' + id + '">切换</button>'
+          + '<button class="secondary mini" data-act="branch" data-id="' + id + '">分支</button>';
+        if (v.status === "draft" || v.status === "rejected") btns += '<button class="mini" data-act="submit" data-id="' + id + '">提交审核</button>';
+        if (v.status === "pending") {
+          if (selfReview) btns += '<span class="hint">本人提交，需他人审签</span>';
+          else {
+            btns += '<button class="mini" data-act="approve" data-id="' + id + '">通过</button>'
+              + '<button class="mini warn" data-act="reject" data-id="' + id + '">退回</button>';
+          }
+        }
+        btns += '</div>';
+        const rejectForm = (v.status === "pending" && !selfReview)
+          ? '<div class="rejectbox" id="rejectBox-' + id + '" hidden><input id="rejectReason-' + id + '" placeholder="退回原因（必填）"><button class="mini warn" data-act="confirmReject" data-id="' + id + '">确认退回</button></div>' : "";
+        return '<div class="vitem' + (isCur ? ' current' : '') + '" style="margin-left:' + (depthOf(id) * 14) + 'px">'
+          + '<div class="vhead"><b>' + esc(v.name) + '</b><span class="badge st-' + v.status + '">' + STATUS[v.status] + (v.locked ? ' 🔒' : '') + '</span>' + (isCur ? '<span class="badge cur">当前</span>' : '') + '</div>'
+          + '<div class="vmeta">' + v.cols + '×' + v.rows + '｜' + esc(v.createdBy) + ' ' + fmtTime(v.createdAt)
+          + (v.parentId && store.versions[v.parentId] ? '｜源自「' + esc(store.versions[v.parentId].name) + '」' : '')
+          + (v.submittedBy ? '<br>提交：' + esc(v.submittedBy) + ' ' + fmtTime(v.submittedAt) : '')
+          + (v.reviewedBy ? '<br>' + (v.status === "rejected" ? '退回' : '通过') + '：' + esc(v.reviewedBy) + ' ' + fmtTime(v.reviewedAt) + (v.reviewReason ? '｜原因：' + esc(v.reviewReason) : '') : '')
+          + '</div>' + btns + rejectForm + '</div>';
+      }).join("");
+      versionList.querySelectorAll("[data-act]").forEach(el => el.onclick = () => {
+        const id = el.dataset.id, act = el.dataset.act;
+        if (act === "switch") switchVersion(id);
+        else if (act === "branch") branchFrom(id);
+        else if (act === "submit") submitVersion(id);
+        else if (act === "approve") approveVersion(id);
+        else if (act === "reject") { const box = document.getElementById("rejectBox-" + id); if (box) box.hidden = !box.hidden; const inp = document.getElementById("rejectReason-" + id); if (inp) inp.focus(); }
+        else if (act === "confirmReject") rejectVersion(id);
+      });
+    }
+
+    function renderAudit() {
+      auditList.innerHTML = store.audit.slice().reverse().map(e =>
+        '<div class="aitem"><div class="ameta">#' + e.seq + '｜' + fmtTime(e.time) + '｜' + esc(e.user) + '｜' + (ACT_NAME[e.action] || esc(e.action)) + (e.versionName ? '｜「' + esc(e.versionName) + '」' : '') + '</div><div>' + esc(e.detail) + '</div></div>'
+      ).join("") || "<p>暂无记录。</p>";
+    }
+
+    // ============ 版本操作 ============
+    function switchVersion(id) {
+      if (!store.versions[id]) return;
+      store.currentId = id;
+      syncFromStore(); saveStore(); renderAll();
+    }
+    function branchFrom(id) {
+      const src = store.versions[id];
+      if (!src) return;
+      const n = store.order.filter(i => store.versions[i].parentId === id).length + 1;
+      const def = src.name + "-分支" + n;
+      const name = (prompt("新草稿名称：", def) || "").trim() || def;
+      const v = makeVersion(name, src.id, src.cols, src.rows, src.cells);
+      addVersion(v);
+      store.currentId = v.id;
+      logAudit("branch", "从「" + src.name + "」分支新建草稿「" + v.name + "」", v.id);
+      syncFromStore(); saveStore(); renderAll();
+    }
+    function submitVersion(id) {
+      const v = store.versions[id];
+      if (!v || (v.status !== "draft" && v.status !== "rejected")) return;
+      v.status = "pending";
+      v.submittedBy = currentUser; v.submittedAt = nowISO();
+      v.reviewedBy = null; v.reviewedAt = null; v.reviewReason = null;
+      logAudit("submit", "提交「" + v.name + "」审核", v.id);
+      saveStore(); renderAll();
+    }
+    function approveVersion(id) {
+      const v = store.versions[id];
+      if (!v || v.status !== "pending") return;
+      if (currentUser === v.submittedBy) { alert("本人不能审批自己的提交，请切换其他人员审签。"); return; }
+      v.status = "approved"; v.locked = true;
+      v.reviewedBy = currentUser; v.reviewedAt = nowISO(); v.reviewReason = null;
+      logAudit("approve", "通过「" + v.name + "」，版本已锁定", v.id);
+      saveStore(); renderAll();
+    }
+    function rejectVersion(id) {
+      const v = store.versions[id];
+      if (!v || v.status !== "pending") return;
+      if (currentUser === v.submittedBy) { alert("本人不能审批自己的提交，请切换其他人员审签。"); return; }
+      const input = document.getElementById("rejectReason-" + id);
+      const reason = ((input && input.value) || "").trim();
+      if (!reason) { if (input) input.focus(); alert("退回必须填写原因。"); return; }
+      v.status = "rejected"; v.locked = false;
+      v.reviewedBy = currentUser; v.reviewedAt = nowISO(); v.reviewReason = reason;
+      logAudit("reject", "退回「" + v.name + "」：" + reason, v.id);
+      saveStore(); renderAll();
+    }
+
+    // ============ 对比与合并 ============
+    function cellAt(v, x, y) { return (x < 0 || x >= v.cols || y < 0 || y >= v.rows) ? -1 : v.cells[y * v.cols + x]; }
+    function findBase(aId, bId) {
+      const anc = new Set();
+      let curId = aId, guard = 0;
+      while (curId && guard++ < 10000) { anc.add(curId); curId = store.versions[curId] && store.versions[curId].parentId; }
+      curId = bId; guard = 0;
+      while (curId && guard++ < 10000) { if (anc.has(curId)) return curId; curId = store.versions[curId] && store.versions[curId].parentId; }
+      return null;
+    }
+    function computeDiff(aId, bId) {
+      const A = store.versions[aId], B = store.versions[bId];
+      const baseId = findBase(aId, bId);
+      const Base = baseId ? store.versions[baseId] : null;
+      const W = Math.max(A.cols, B.cols), H = Math.max(A.rows, B.rows);
+      const items = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const av = cellAt(A, x, y), bv = cellAt(B, x, y);
+        if (av === bv) continue;
+        const kv = Base ? cellAt(Base, x, y) : -1;
+        const inA = x < A.cols && y < A.rows;
+        const conflict = kv !== av && kv !== bv; // 两侧相对基底都改过且结果不同
+        items.push({ x, y, av, bv, kv, inA, conflict, mergeable: inA });
+      }
+      return { A, B, Base, W, H, items };
+    }
+    function colorCounts(v) { const c = colors.map(() => 0); v.cells.forEach(x => { if (c[x] != null) c[x]++; }); return c; }
+    function sessKey(aId, bId) { return aId + "|" + bId; }
+    function posKey(it) { return it.x + "," + it.y; }
+    function getSession(aId, bId, create) {
+      const k = sessKey(aId, bId);
+      if (!store.mergeSessions[k] && create) store.mergeSessions[k] = { resolutions: {}, picks: {}, updatedBy: currentUser, updatedAt: nowISO() };
+      return store.mergeSessions[k] || { resolutions: {}, picks: {} };
+    }
+    // 普通差异默认取舍：来源侧相对基底改过的默认采用来源；来源未改的默认保留目标（勾选则还原目标改动）
+    function takeB(sess, it) { const p = sess.picks[posKey(it)]; return p !== undefined ? p : (it.kv !== it.bv); }
+
+    function renderCompare() {
+      const opts = store.order.map(id => { const v = store.versions[id]; return '<option value="' + id + '">' + esc(v.name) + '（' + STATUS[v.status] + '）</option>'; }).join("");
+      cmpA.innerHTML = opts; cmpB.innerHTML = opts;
+      const sel = store.compareSel || {};
+      cmpA.value = (sel.a && store.versions[sel.a]) ? sel.a : store.currentId;
+      cmpB.value = (sel.b && store.versions[sel.b]) ? sel.b : (store.order.find(id => id !== cmpA.value) || store.currentId);
+      renderCompareResult();
+    }
+
+    function renderCompareResult() {
+      const aId = cmpA.value, bId = cmpB.value;
+      if (!aId || !bId || !store.versions[aId] || !store.versions[bId]) { cmpResult.innerHTML = "<p>请选择两个版本。</p>"; return; }
+      const scroll = cmpResult.scrollTop;
+      const { A, B, Base, W, H, items } = computeDiff(aId, bId);
+      const sess = getSession(aId, bId, false);
+      const conflicts = items.filter(i => i.conflict && i.mergeable);
+      const normals = items.filter(i => !i.conflict && i.mergeable);
+      const outOnly = items.filter(i => !i.mergeable);
+      const unresolved = conflicts.filter(i => !sess.resolutions[posKey(i)]);
+      const ca = colorCounts(A), cb = colorCounts(B);
+      const deltas = colors.map((c, i) => ({ i, a: ca[i], b: cb[i] })).filter(d => d.a !== d.b);
+
+      let html = '<p>目标 <b>' + esc(A.name) + '</b> ← 来源 <b>' + esc(B.name) + '</b>'
+        + (Base ? '｜共同基底「' + esc(Base.name) + '」' : '｜无共同基底，全部按普通差异处理') + '</p>'
+        + '<p>格子差异 <b>' + items.length + '</b> 处：普通 ' + normals.length + ' 处，冲突 ' + conflicts.length + ' 处'
+        + (outOnly.length ? '，超出目标范围不可合并 ' + outOnly.length + ' 处' : '')
+        + (A.cols !== B.cols || A.rows !== B.rows ? '｜<span class="warning">尺寸不同：' + A.cols + '×' + A.rows + ' 对 ' + B.cols + '×' + B.rows + '</span>' : '')
+        + '</p>';
+
+      html += '<h3>受影响色线</h3>';
+      html += deltas.length
+        ? deltas.map(d => '<div class="stat"><span><span class="chip" style="background:' + colors[d.i] + '"></span> 色线' + d.i + '</span><b>' + d.a + ' → ' + d.b + '（' + (d.b - d.a > 0 ? '+' : '') + (d.b - d.a) + '）</b></div>').join("")
+        : '<p>各色线用量一致。</p>';
+
+      html += '<h3>格子差异图</h3>';
+      const itemMap = {};
+      items.forEach(it => itemMap[posKey(it)] = it);
+      html += '<div class="diffgrid" style="grid-template-columns:repeat(' + W + ',1fr)">';
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const it = itemMap[x + "," + y];
+        if (!it) {
+          const v0 = cellAt(A, x, y);
+          html += '<div class="dgcell same" style="background:' + (v0 >= 0 ? colors[v0] : "#ddd") + '"></div>';
+        } else {
+          const cls = !it.mergeable ? "out" : (it.conflict ? "conf" : "diff");
+          const t = "第" + (it.y + 1) + "行第" + (it.x + 1) + "列｜目标:" + valName(it.av) + "｜来源:" + valName(it.bv) + (it.conflict ? "｜冲突" : "");
+          html += '<div class="dgcell ' + cls + '" title="' + esc(t) + '"></div>';
+        }
+      }
+      html += '</div><p class="legend">图例：<span class="lg diff"></span>普通差异<span class="lg conf"></span>冲突<span class="lg out"></span>超出目标范围（不可合并）</p>';
+
+      if (conflicts.length) {
+        html += '<h3>冲突（须全部处理后才能合并，还剩 ' + unresolved.length + ' 处未处理）</h3>';
+        html += conflicts.slice(0, 500).map(it => {
+          const k = posKey(it), r = sess.resolutions[k];
+          return '<div class="citem' + (r ? ' resolved' : '') + '">'
+            + '<span>第' + (it.y + 1) + '行第' + (it.x + 1) + '列</span>'
+            + '<label><input type="radio" name="cf-' + k + '" data-k="' + k + '" value="A"' + (r === "A" ? " checked" : "") + '> 目标 <span class="chip" style="background:' + (it.av < 0 ? "#ddd" : colors[it.av]) + '"></span></label>'
+            + '<label><input type="radio" name="cf-' + k + '" data-k="' + k + '" value="B"' + (r === "B" ? " checked" : "") + '> 来源 <span class="chip" style="background:' + (it.bv < 0 ? "#ddd" : colors[it.bv]) + '"></span></label>'
+            + '<span class="base">基底 ' + (it.kv < 0 ? "无" : '<span class="chip" style="background:' + colors[it.kv] + '"></span>') + '</span>'
+            + '</div>';
+        }).join("");
+        if (conflicts.length > 500) html += '<p>共 ' + conflicts.length + ' 处冲突，仅显示前 500 处。</p>';
+      }
+
+      if (normals.length) {
+        html += '<h3>普通差异（逐项挑选合并）</h3>';
+        html += '<div class="vbtns"><button class="secondary mini" id="pickAll">全选</button><button class="secondary mini" id="pickNone">全不选</button></div>';
+        html += normals.slice(0, 500).map(it => {
+          const k = posKey(it), take = takeB(sess, it);
+          return '<label class="citem"><input type="checkbox" data-k="' + k + '"' + (take ? " checked" : "") + '> '
+            + '第' + (it.y + 1) + '行第' + (it.x + 1) + '列：'
+            + '<span class="chip" style="background:' + (it.av < 0 ? "#ddd" : colors[it.av]) + '"></span> → '
+            + '<span class="chip" style="background:' + (it.bv < 0 ? "#ddd" : colors[it.bv]) + '"></span>'
+            + (it.kv === it.bv ? '<span class="base">（来源未改，勾选将还原目标改动）</span>' : '')
+            + '</label>';
+        }).join("");
+        if (normals.length > 500) html += '<p>共 ' + normals.length + ' 项，仅显示前 500 项；合并对全部勾选项生效。</p>';
+      }
+      if (!items.length) html += '<p>两版格子完全一致。</p>';
+      if (sess.updatedBy) html += '<p class="legend">冲突处理记录：' + esc(sess.updatedBy) + ' ' + fmtTime(sess.updatedAt) + '</p>';
+
+      html += '<div class="mergebar">'
+        + (unresolved.length ? '<p class="warning">还有 ' + unresolved.length + ' 处冲突未处理，不能合并。</p>' : '')
+        + '<button id="mergeBtn" ' + (items.length && !unresolved.length ? "" : "disabled") + '>将「' + esc(B.name) + '」的选中变更合并到「' + esc(A.name) + '」（生成新草稿）</button>'
+        + '</div>';
+      cmpResult.innerHTML = html;
+      cmpResult.scrollTop = scroll;
+
+      cmpResult.querySelectorAll('input[type="radio"][data-k]').forEach(el => el.onchange = () => {
+        const s = getSession(aId, bId, true);
+        s.resolutions[el.dataset.k] = el.value;
+        s.updatedBy = currentUser; s.updatedAt = nowISO();
+        saveStore(); renderCompareResult();
+      });
+      cmpResult.querySelectorAll('input[type="checkbox"][data-k]').forEach(el => el.onchange = () => {
+        const s = getSession(aId, bId, true);
+        s.picks[el.dataset.k] = el.checked;
+        s.updatedBy = currentUser; s.updatedAt = nowISO();
+        saveStore();
+      });
+      const pa = document.getElementById("pickAll"), pn = document.getElementById("pickNone");
+      if (pa) pa.onclick = () => { const s = getSession(aId, bId, true); normals.forEach(it => s.picks[posKey(it)] = true); s.updatedBy = currentUser; s.updatedAt = nowISO(); saveStore(); renderCompareResult(); };
+      if (pn) pn.onclick = () => { const s = getSession(aId, bId, true); normals.forEach(it => s.picks[posKey(it)] = false); s.updatedBy = currentUser; s.updatedAt = nowISO(); saveStore(); renderCompareResult(); };
+      const mb = document.getElementById("mergeBtn");
+      if (mb) mb.onclick = () => doMerge(aId, bId);
+    }
+
+    function doMerge(aId, bId) {
+      const { A, B, items } = computeDiff(aId, bId);
+      const sess = getSession(aId, bId, false);
+      const conflicts = items.filter(i => i.conflict && i.mergeable);
+      const unresolved = conflicts.filter(i => !sess.resolutions[posKey(i)]);
+      if (unresolved.length) { alert("还有 " + unresolved.length + " 处冲突未处理，不能合并。"); return; }
+      if (!items.length) { alert("两版没有可合并的差异。"); return; }
+      const newCells = A.cells.slice();
+      let picked = 0, confA = 0, confB = 0, skipped = 0;
+      items.forEach(it => {
+        if (!it.mergeable) { skipped++; return; }
+        const k = it.y * A.cols + it.x;
+        const bval = it.bv < 0 ? 0 : it.bv;
+        if (it.conflict) {
+          const side = sess.resolutions[posKey(it)];
+          if (side === "B") { newCells[k] = bval; confB++; } else { newCells[k] = it.av; confA++; }
+        } else if (takeB(sess, it)) { newCells[k] = bval; picked++; }
+        else skipped++;
+      });
+      const name = "合并·" + A.name + "←" + B.name;
+      const v = makeVersion(name, A.id, A.cols, A.rows, newCells);
+      addVersion(v);
+      store.currentId = v.id;
+      logAudit("merge", "将「" + B.name + "」并入「" + A.name + "」生成新草稿「" + name + "」：采用普通差异 " + picked + " 项，处理冲突 " + conflicts.length + " 项（取目标 " + confA + "、取来源 " + confB + "），跳过 " + skipped + " 项", v.id);
+      syncFromStore(); saveStore(); renderAll();
+    }
+
+    // ============ 导入导出 ============
+    function fingerprint(e) { return [e.time, e.user, e.action, e.versionId, e.detail].join("|"); }
+    function importData(data) {
+      if (data && data.store && data.store.versions) {
+        const s = data.store;
+        let nv = 0;
+        Object.values(s.versions).forEach(v => {
+          if (!v || !v.id || !Array.isArray(v.cells)) return;
+          if (!store.versions[v.id]) { store.order.push(v.id); nv++; }
+          store.versions[v.id] = v;
+        });
+        const seen = new Set(store.audit.map(fingerprint));
+        let na = 0;
+        (s.audit || []).forEach(e => { const f = fingerprint(e); if (!seen.has(f)) { store.audit.push(e); seen.add(f); na++; } });
+        store.audit.sort((a, b) => String(a.time).localeCompare(String(b.time)) || (a.seq || 0) - (b.seq || 0));
+        store.seq = store.audit.reduce((m, e) => Math.max(m, e.seq || 0), store.seq || 0);
+        Object.keys(s.mergeSessions || {}).forEach(k => { store.mergeSessions[k] = s.mergeSessions[k]; });
+        if (s.currentId && store.versions[s.currentId]) store.currentId = s.currentId;
+        logAudit("import", "导入版本库：新增版本 " + nv + " 个，并入记录 " + na + " 条（记录只增不减）");
+      } else if (data && Array.isArray(data.cells) && data.cols && data.rows) {
+        const v = makeVersion("导入的图案", store.currentId, data.cols, data.rows, data.cells);
+        addVersion(v);
+        store.currentId = v.id;
+        logAudit("import", "导入旧版导出文件为新草稿「" + v.name + "」", v.id);
+      } else {
+        alert("导入失败：无法识别的文件格式");
+        return;
+      }
+      syncFromStore(); saveStore(); renderAll();
+    }
+
+    // ============ 整体渲染 ============
+    function renderMeta() { renderCurrentBar(); renderVersions(); renderAudit(); renderCompare(); }
+    function renderAll() { render(); renderMeta(); }
+
+    // ============ 事件绑定 ============
     document.querySelectorAll("[data-block]").forEach(btn => btn.onclick = () => block = btn.dataset.block);
-    document.querySelector("#newBtn").onclick = () => { undo = []; redo = []; init(false); };
-    document.querySelector("#undoBtn").onclick = () => { if (!undo.length) return; redo.push([...cells]); cells = undo.pop(); render(); };
-    document.querySelector("#redoBtn").onclick = () => { if (!redo.length) return; undo.push([...cells]); cells = redo.pop(); render(); };
-    document.querySelector("#saveBtn").onclick = () => localStorage.setItem("zfl31Pattern", JSON.stringify({ cols, rows, cells }));
-    document.querySelector("#exportBtn").onclick = () => {
-      const data = { cols, rows, cells, usage: colors.map((color, i) => ({ color, count: cells.filter(v => v === i).length })) };
+    $("#newBtn").onclick = () => {
+      if (!guardEditable()) return;
+      undo = []; redo = [];
+      cols = Number($("#cols").value); rows = Number($("#rows").value);
+      cells = Array(cols * rows).fill(0);
+      writeBack(); renderAll();
+    };
+    $("#undoBtn").onclick = () => { if (!guardEditable() || !undo.length) return; redo.push([...cells]); cells = undo.pop(); writeBack(); render(); };
+    $("#redoBtn").onclick = () => { if (!guardEditable() || !redo.length) return; undo.push([...cells]); cells = redo.pop(); writeBack(); render(); };
+    $("#saveBtn").onclick = () => { saveStore(); $("#saveTip").textContent = "已保存 " + new Date().toLocaleTimeString("zh-CN", { hour12: false }); };
+    $("#exportBtn").onclick = () => {
+      const data = { app: "zfl31-studio", format: 2, exportedAt: nowISO(), exportedBy: currentUser,
+        cols, rows, cells,
+        usage: colors.map((color, i) => ({ color, count: cells.filter(v => v === i).length })),
+        store };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "brocade-pattern.json"; a.click(); URL.revokeObjectURL(a.href);
     };
-    init();
+    $("#importBtn").onclick = () => $("#importFile").click();
+    $("#importFile").onchange = e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try { importData(JSON.parse(r.result)); }
+        catch (err) { alert("导入失败：文件不是有效的JSON"); }
+        e.target.value = "";
+      };
+      r.readAsText(f);
+    };
+    $("#userName").value = currentUser;
+    $("#userName").onchange = () => {
+      currentUser = $("#userName").value.trim() || "未命名";
+      $("#userName").value = currentUser;
+      localStorage.setItem(USER_KEY, currentUser);
+      renderMeta();
+    };
+    cmpA.onchange = cmpB.onchange = () => { store.compareSel = { a: cmpA.value, b: cmpB.value }; saveStore(); renderCompareResult(); };
+
+    loadStore();
+    syncFromStore();
+    renderAll();
   </script>
 </body>
 </html>
